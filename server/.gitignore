@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+
+# build cache
+*.tsbuildinfo
+
+# prisma client output is fine to keep out of git
+# (regenerated via `npm run prisma:generate`)
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# data — never commit the raw community roster
+data/
+*.xlsx
+!data/.gitkeep

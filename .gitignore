@@ -1,0 +1,55 @@
+# =============================================================================
+# Root .gitignore — applies across server/, mobile/, adminpanel/
+# Per-folder .gitignore files (e.g. server/.gitignore) layer additional rules.
+# =============================================================================
+
+# --- Dependencies ---
+node_modules/
+.pnp.*
+.yarn/
+
+# --- Build artifacts ---
+dist/
+build/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# --- Environment / secrets (NEVER COMMIT) ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.history/
+
+# --- Claude Code state (per-user, never share) ---
+.claude/
+.claude.json
+
+# --- Test / coverage ---
+coverage/
+.nyc_output/
+
+# --- Raw community data (PII — never commit) ---
+data/
+*.xlsx
+!data/.gitkeep

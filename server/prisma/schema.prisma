@@ -1,0 +1,296 @@
+// Samaj Connect — Prisma schema (MongoDB Atlas).
+// Source of truth: server/SAMAJ_CONNECT_SPEC.md §3.
+
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGODB_URI")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Core roster ----------
+model Household {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  nativePlace     String   // = source sheet name (village)
+  nativeAddress   String?
+  vadodaraAddress String?
+  city            String   @default("Vadodara")
+  householdPhone  String?  // canonical head/household number
+  headPersonId    String?  @db.ObjectId @unique
+  head            Person?  @relation("HeadOf", fields: [headPersonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  persons         Person[] @relation("MembersOf")
+  importBatchId   String?  @db.ObjectId
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Person {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  householdId     String   @db.ObjectId
+  household       Household @relation("MembersOf", fields: [householdId], references: [id])
+  headOf          Household? @relation("HeadOf")
+
+  fullName        String
+  relation        Relation @default(OTHER)
+  gender          Gender?
+  dob             DateTime?
+  phone           String?  @unique          // canonical 10-digit; nullable
+  phoneE164       String?
+  email           String?  @unique          // NOT in Excel; captured on first login
+  professionRaw   String?                   // original messy text
+  professionCatId String?  @db.ObjectId
+  professionCat   ProfessionCategory? @relation(fields: [professionCatId], references: [id])
+  bloodGroup      String?
+  notes           String?
+
+  // privacy
+  showPhone       Boolean @default(true)    // visible to logged-in members
+  showAddress     Boolean @default(false)   // full address hidden by default
+
+  user            User?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([fullName])
+  @@index([professionCatId])
+}
+
+model ProfessionCategory {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String   @unique                 // canonical English label, e.g. "Doctor"
+  nameGu   String?                          // "ડૉક્ટર"
+  aliases  String[]                         // ["doctor","ડૉક્ટર","મેડિકલ","mbbs", ...]
+  icon     String?
+  persons  Person[]
+}
+
+// ---------- Auth ----------
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  phone        String   @unique              // canonical
+  email        String?  @unique              // copied from Person on first login
+  role         Role     @default(MEMBER)
+  personId     String?  @db.ObjectId @unique
+  person       Person?  @relation(fields: [personId], references: [id])
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// One-time email OTP codes (short TTL, store only the hash).
+model OtpCode {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  phone      String                           // who is logging in (roster key)
+  email      String                           // where the code was sent
+  codeHash   String                           // HASH only, never the raw code
+  expiresAt  DateTime
+  consumed   Boolean  @default(false)
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([phone])
+}
+
+// ---------- Corrections (replaces self-edit) ----------
+model ProfileCorrectionRequest {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  personId          String   @db.ObjectId
+  requestedByUserId String   @db.ObjectId
+  fieldName         String
+  oldValue          String?
+  newValue          String?
+  status            ReviewStatus @default(PENDING)
+  reviewedByUserId  String?  @db.ObjectId
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------- Import bookkeeping ----------
+model ImportBatch {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  fileName    String
+  uploadedBy  String?
+  totalSheets Int
+  households  Int
+  persons     Int
+  skippedRows Int
+  createdAt   DateTime @default(now())
+}
+
+// ---------- Events / payments / expenses ----------
+model Event {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  dateTime              DateTime
+  venue                 String?
+  description           String?
+  contributionPerFamily Int      @default(1000)
+  registrationOpen      Boolean  @default(true)
+  createdBy             String   @db.ObjectId
+  createdAt             DateTime @default(now())
+  registrations         EventRegistration[]
+  payments              Payment[]
+  expenses              Expense[]
+}
+
+model EventRegistration {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId        String   @db.ObjectId
+  householdId    String   @db.ObjectId
+  attendeesCount Int      @default(0)
+  performances   Performance[]
+  createdAt      DateTime @default(now())
+  event          Event    @relation(fields: [eventId], references: [id])
+
+  @@unique([eventId, householdId])
+}
+
+model Performance {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  registrationId String   @db.ObjectId
+  childName      String
+  type           PerformanceType
+  title          String?
+  durationMin    Int?
+  notes          String?
+  registration   EventRegistration @relation(fields: [registrationId], references: [id])
+}
+
+model Payment {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId     String   @db.ObjectId
+  householdId String   @db.ObjectId
+  amountDue   Int
+  amountPaid  Int      @default(0)
+  mode        PaymentMode?
+  status      PaymentStatus @default(PENDING)
+  reference   String?
+  collectedBy String?  @db.ObjectId
+  paidAt      DateTime?
+  notes       String?
+  event       Event    @relation(fields: [eventId], references: [id])
+}
+
+model Expense {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  category  ExpenseCategory
+  amount    Int
+  paidTo    String?
+  paidBy    String?
+  date      DateTime @default(now())
+  notes     String?
+  event     Event    @relation(fields: [eventId], references: [id])
+}
+
+model HelpRequest {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  requestedBy String   @db.ObjectId
+  category    HelpCategory
+  description String
+  urgency     Urgency  @default(NORMAL)
+  contactPref String?
+  status      ReviewStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  title     String
+  body      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorId   String   @db.ObjectId
+  action    String
+  entity    String
+  entityId  String?  @db.ObjectId
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+// ---------- Enums ----------
+enum Role {
+  ADMIN
+  COMMITTEE
+  MEMBER
+}
+
+enum Relation {
+  SELF
+  SPOUSE
+  SON
+  DAUGHTER
+  DAUGHTER_IN_LAW
+  MOTHER
+  FATHER
+  GRANDSON
+  GRANDDAUGHTER
+  OTHER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+enum ExpenseCategory {
+  FOOD
+  VENUE
+  DECORATION
+  SOUND
+  GIFTS
+  PRINTING
+  MISC
+}
+
+enum PerformanceType {
+  DANCE
+  ACT
+  SPEECH
+  SINGING
+  OTHER
+}
+
+enum HelpCategory {
+  MEDICAL
+  EDUCATION
+  JOB
+  BUSINESS
+  LEGAL
+  EMERGENCY
+  BLOOD_DONATION
+}
+
+enum Urgency {
+  LOW
+  NORMAL
+  HIGH
+}

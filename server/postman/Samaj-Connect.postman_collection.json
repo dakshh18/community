@@ -1,0 +1,691 @@
+{
+  "info": {
+    "name": "Samaj Connect API",
+    "description": "Backend API for Samaj Connect community app. Phases A-F complete.\n\n## Quick start\n1. Make sure the server is running: `npm run dev` in `server/` (defaults to http://localhost:4000)\n2. Send **Auth → 1. Start (phone lookup)** with `{{phone}}` → confirms the number exists.\n3. Send **Auth → 2. Send OTP** to put the mock code in the dev console.\n4. Send **Auth → 3. Verify OTP** — the test script auto-saves the JWT to `{{token}}`. Every other request uses that token.\n5. To test admin-only endpoints, run `npx tsx scripts/promote.ts 9428656090 ADMIN` from the server folder, then re-login.\n\n## Collection variables\n- `baseUrl` — server URL (default `http://localhost:4000`)\n- `token` — JWT, auto-set by `/auth/verify-otp`\n- `phone` — `9428656090` (logged-in user)\n- `otherPhone` — `8780873706` (second test user)\n- `email` — `pdaksh163@gmail.com`\n- `eventId`, `personId`, `correctionId`, `helpId`, `paymentId`, `expenseId`, `registrationId`, `performanceId` — fill in from response payloads as you go.\n\nMOCK_OTP=true in `.env` makes the verify code always `123456`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "phone", "value": "9428656090", "type": "string" },
+    { "key": "otherPhone", "value": "8780873706", "type": "string" },
+    { "key": "email", "value": "pdaksh163@gmail.com", "type": "string" },
+    { "key": "eventId", "value": "", "type": "string" },
+    { "key": "personId", "value": "", "type": "string" },
+    { "key": "householdId", "value": "", "type": "string" },
+    { "key": "correctionId", "value": "", "type": "string" },
+    { "key": "helpId", "value": "", "type": "string" },
+    { "key": "paymentId", "value": "", "type": "string" },
+    { "key": "expenseId", "value": "", "type": "string" },
+    { "key": "registrationId", "value": "", "type": "string" },
+    { "key": "performanceId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "1. Start (phone lookup)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/start", "host": ["{{baseUrl}}"], "path": ["auth", "start"] }
+          }
+        },
+        {
+          "name": "2. Send OTP (first time: include email)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "First login: include email (it's stored on the Person). Subsequent logins can omit email — server reuses the stored one.\n\nWith MOCK_OTP=true the code printed in the server console is always `123456`.",
+            "url": { "raw": "{{baseUrl}}/auth/send-otp", "host": ["{{baseUrl}}"], "path": ["auth", "send-otp"] }
+          }
+        },
+        {
+          "name": "3. Verify OTP (auto-saves JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.token) {",
+                  "    pm.collectionVariables.set('token', j.token);",
+                  "    console.log('[Samaj] token saved');",
+                  "  }",
+                  "  if (j.personId) pm.collectionVariables.set('personId', j.personId);",
+                  "  if (j.householdId) pm.collectionVariables.set('householdId', j.householdId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["auth", "verify-otp"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Directory",
+      "item": [
+        {
+          "name": "GET /directory (search & filter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/directory?q=&professionCategoryId=&nativePlace=&city=&bloodGroup=&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["directory"],
+              "query": [
+                { "key": "q", "value": "", "description": "Name substring (case-insensitive)" },
+                { "key": "professionCategoryId", "value": "", "description": "From GET /professions" },
+                { "key": "nativePlace", "value": "", "description": "Village name substring" },
+                { "key": "city", "value": "", "description": "Vadodara" },
+                { "key": "bloodGroup", "value": "", "description": "A+, B-, O+, etc." },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /persons/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/persons/{{personId}}", "host": ["{{baseUrl}}"], "path": ["persons", "{{personId}}"] }
+          }
+        },
+        {
+          "name": "GET /households/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/households/me", "host": ["{{baseUrl}}"], "path": ["households", "me"] }
+          }
+        },
+        {
+          "name": "GET /professions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/professions", "host": ["{{baseUrl}}"], "path": ["professions"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Me (settings)",
+      "item": [
+        {
+          "name": "PATCH /me/privacy",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"showPhone\": true,\n  \"showAddress\": false\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/me/privacy", "host": ["{{baseUrl}}"], "path": ["me", "privacy"] }
+          }
+        },
+        {
+          "name": "PATCH /me/email (send code to new email)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newEmail\": \"pdaksh163+changed@gmail.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/me/email", "host": ["{{baseUrl}}"], "path": ["me", "email"] }
+          }
+        },
+        {
+          "name": "POST /me/email/verify",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/me/email/verify", "host": ["{{baseUrl}}"], "path": ["me", "email", "verify"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Corrections",
+      "item": [
+        {
+          "name": "POST /corrections (submit a change request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.collectionVariables.set('correctionId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personId\": \"{{personId}}\",\n  \"fieldName\": \"bloodGroup\",\n  \"newValue\": \"A+\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "fieldName must be one of: fullName, relation, gender, dob, phone, email, bloodGroup, professionRaw.",
+            "url": { "raw": "{{baseUrl}}/corrections", "host": ["{{baseUrl}}"], "path": ["corrections"] }
+          }
+        },
+        {
+          "name": "GET /corrections (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/corrections?status=PENDING&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["corrections"],
+              "query": [
+                { "key": "status", "value": "PENDING", "description": "PENDING | APPROVED | REJECTED" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /corrections/:id (APPROVE / REJECT)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/corrections/{{correctionId}}", "host": ["{{baseUrl}}"], "path": ["corrections", "{{correctionId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "GET /events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events?upcoming=true&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [
+                { "key": "upcoming", "value": "true" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /events (ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.collectionVariables.set('eventId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Snehmilan 2026\",\n  \"dateTime\": \"2026-12-15T18:00:00.000Z\",\n  \"venue\": \"Patidar Samaj Hall, Vadodara\",\n  \"description\": \"Annual community gathering\",\n  \"contributionPerFamily\": 1500,\n  \"registrationOpen\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] }
+          }
+        },
+        {
+          "name": "GET /events/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}"] }
+          }
+        },
+        {
+          "name": "PATCH /events/:id (ADMIN)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationOpen\": false\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}"] }
+          }
+        },
+        {
+          "name": "DELETE /events/:id (ADMIN — cascades)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}"] }
+          }
+        },
+        {
+          "name": "GET /events/:id/dashboard (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/dashboard", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "dashboard"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Registrations & Performances",
+      "item": [
+        {
+          "name": "POST /events/:id/register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.id) pm.collectionVariables.set('registrationId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendeesCount\": 5,\n  \"performances\": [\n    {\n      \"childName\": \"Aarav\",\n      \"type\": \"DANCE\",\n      \"title\": \"Garba\",\n      \"durationMin\": 4\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/register", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "register"] }
+          }
+        },
+        {
+          "name": "GET /events/:id/registration (my own)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/registration", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "registration"] }
+          }
+        },
+        {
+          "name": "DELETE /events/:id/registration (cancel)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/registration", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "registration"] }
+          }
+        },
+        {
+          "name": "GET /events/:id/registrations (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/registrations", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "registrations"] }
+          }
+        },
+        {
+          "name": "POST /registrations/:regId/performances",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"childName\": \"Diya\",\n  \"type\": \"SINGING\",\n  \"title\": \"Bhajan\",\n  \"durationMin\": 5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/registrations/{{registrationId}}/performances", "host": ["{{baseUrl}}"], "path": ["registrations", "{{registrationId}}", "performances"] }
+          }
+        },
+        {
+          "name": "DELETE /performances/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/performances/{{performanceId}}", "host": ["{{baseUrl}}"], "path": ["performances", "{{performanceId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "GET /events/:id/payments/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/payments/me", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "payments", "me"] }
+          }
+        },
+        {
+          "name": "GET /events/:id/payments (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventId}}/payments?status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventId}}", "payments"],
+              "query": [
+                { "key": "status", "value": "PENDING", "description": "PENDING | PARTIAL | PAID", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /events/:id/payments (record/update)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.id) pm.collectionVariables.set('paymentId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"householdId\": \"{{householdId}}\",\n  \"amountPaid\": 1500,\n  \"mode\": \"UPI\",\n  \"reference\": \"UPI-REF-123\",\n  \"notes\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/payments", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "payments"] }
+          }
+        },
+        {
+          "name": "PATCH /payments/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Receipt issued\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/payments/{{paymentId}}", "host": ["{{baseUrl}}"], "path": ["payments", "{{paymentId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "GET /events/:id/expenses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/expenses", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "expenses"] }
+          }
+        },
+        {
+          "name": "POST /events/:id/expenses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.id) pm.collectionVariables.set('expenseId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"FOOD\",\n  \"amount\": 4500,\n  \"paidTo\": \"Vendor A\",\n  \"paidBy\": \"Committee\",\n  \"notes\": \"Catering for ~150 people\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "category must be one of: FOOD, VENUE, DECORATION, SOUND, GIFTS, PRINTING, MISC",
+            "url": { "raw": "{{baseUrl}}/events/{{eventId}}/expenses", "host": ["{{baseUrl}}"], "path": ["events", "{{eventId}}", "expenses"] }
+          }
+        },
+        {
+          "name": "PATCH /expenses/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 4800\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/expenses/{{expenseId}}", "host": ["{{baseUrl}}"], "path": ["expenses", "{{expenseId}}"] }
+          }
+        },
+        {
+          "name": "DELETE /expenses/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/expenses/{{expenseId}}", "host": ["{{baseUrl}}"], "path": ["expenses", "{{expenseId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Help",
+      "item": [
+        {
+          "name": "POST /help (member submits)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.id) pm.collectionVariables.set('helpId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"MEDICAL\",\n  \"description\": \"Need a blood donor (O+) for surgery on Friday\",\n  \"urgency\": \"HIGH\",\n  \"contactPref\": \"phone call\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "category: MEDICAL | EDUCATION | JOB | BUSINESS | LEGAL | EMERGENCY | BLOOD_DONATION\nurgency: LOW | NORMAL | HIGH",
+            "url": { "raw": "{{baseUrl}}/help", "host": ["{{baseUrl}}"], "path": ["help"] }
+          }
+        },
+        {
+          "name": "GET /help/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/help/me", "host": ["{{baseUrl}}"], "path": ["help", "me"] }
+          }
+        },
+        {
+          "name": "GET /help (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/help?status=PENDING&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["help"],
+              "query": [
+                { "key": "status", "value": "PENDING" },
+                { "key": "category", "value": "", "disabled": true },
+                { "key": "urgency", "value": "", "disabled": true },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /help/:id (status change)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/help/{{helpId}}", "host": ["{{baseUrl}}"], "path": ["help", "{{helpId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin & Committee",
+      "item": [
+        {
+          "name": "GET /admin/stats (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/stats", "host": ["{{baseUrl}}"], "path": ["admin", "stats"] }
+          }
+        },
+        {
+          "name": "GET /committee/stats (ADMIN/COMMITTEE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/committee/stats", "host": ["{{baseUrl}}"], "path": ["committee", "stats"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports (CSV)",
+      "item": [
+        {
+          "name": "GET /reports/members.csv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/reports/members.csv", "host": ["{{baseUrl}}"], "path": ["reports", "members.csv"] }
+          }
+        },
+        {
+          "name": "GET /reports/events/:id/registrations.csv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/reports/events/{{eventId}}/registrations.csv", "host": ["{{baseUrl}}"], "path": ["reports", "events", "{{eventId}}", "registrations.csv"] }
+          }
+        },
+        {
+          "name": "GET /reports/events/:id/payments.csv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/reports/events/{{eventId}}/payments.csv", "host": ["{{baseUrl}}"], "path": ["reports", "events", "{{eventId}}", "payments.csv"] }
+          }
+        },
+        {
+          "name": "GET /reports/events/:id/expenses.csv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/reports/events/{{eventId}}/expenses.csv", "host": ["{{baseUrl}}"], "path": ["reports", "events", "{{eventId}}", "expenses.csv"] }
+          }
+        },
+        {
+          "name": "GET /reports/payments/pending.csv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/reports/payments/pending.csv", "host": ["{{baseUrl}}"], "path": ["reports", "payments", "pending.csv"] }
+          }
+        }
+      ]
+    }
+  ]
+}
