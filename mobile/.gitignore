@@ -1,0 +1,31 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Misc — debugging screenshots (kept out of source control)
+WhatsApp Image*
+Screenshot*.png
+Screenshot*.jpeg
