@@ -74,11 +74,20 @@ export async function listDirectory(
 
   const q = nonEmpty(query.q);
   if (q) {
-    where.fullName = { contains: q, mode: 'insensitive' };
+    // Search both the original Gujarati name and the romanized index.
+    where.OR = [
+      { fullName: { contains: q, mode: 'insensitive' } },
+      { fullNameLatin: { contains: q.toLowerCase(), mode: 'insensitive' } },
+    ];
   }
 
   const profId = nonEmpty(query.professionCategoryId);
-  if (profId && OBJECT_ID.test(profId)) {
+  if (profId === 'none') {
+    // Special sentinel: persons with NO resolved profession category.
+    // Use Prisma's MongoDB-specific `isSet: false` because most docs without
+    // a profession have the field missing entirely (not stored as null).
+    where.professionCatId = { isSet: false };
+  } else if (profId && OBJECT_ID.test(profId)) {
     where.professionCatId = profId;
   }
 
@@ -159,16 +168,33 @@ export async function getMyHousehold(viewer: ViewerCtx): Promise<MyHouseholdResu
   };
 }
 
-export async function listProfessions(): Promise<ProfessionCategoryRow[]> {
-  const cats = await prisma.professionCategory.findMany({
-    orderBy: { name: 'asc' },
-    include: { _count: { select: { persons: true } } },
-  });
-  return cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    nameGu: c.nameGu,
-    icon: c.icon,
-    personsCount: c._count.persons,
-  }));
+export interface ProfessionsResult {
+  categories: ProfessionCategoryRow[];
+  uncategorizedCount: number;
+  totalPersons: number;
+}
+
+export async function listProfessions(): Promise<ProfessionsResult> {
+  const [cats, totalPersons, withCategory] = await Promise.all([
+    prisma.professionCategory.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { persons: true } } },
+    }),
+    prisma.person.count(),
+    // Direct null count is broken for MongoDB fields that may be missing
+    // entirely, so we derive uncategorizedCount by subtraction.
+    prisma.person.count({ where: { professionCatId: { not: null } } }),
+  ]);
+
+  return {
+    categories: cats.map((c) => ({
+      id: c.id,
+      name: c.name,
+      nameGu: c.nameGu,
+      icon: c.icon,
+      personsCount: c._count.persons,
+    })),
+    uncategorizedCount: Math.max(0, totalPersons - withCategory),
+    totalPersons,
+  };
 }

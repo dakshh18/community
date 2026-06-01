@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { HomeScreen } from '@/screens/HomeScreen';
 import { PlaceholderScreen } from '@/screens/PlaceholderScreen';
+import { DirectoryStack } from './DirectoryStack';
+import { ProfileStack } from './ProfileStack';
 import { colors, spacing, typography } from '@/theme';
 import type { RootTabParamList } from './types';
 
@@ -39,14 +41,10 @@ export function AppTabs() {
       })}
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
-      <Tabs.Screen
-        name="Directory"
-        component={PlaceholderScreen}
-        initialParams={undefined}
-      />
+      <Tabs.Screen name="Directory" component={DirectoryStack} />
       <Tabs.Screen name="Events" component={PlaceholderScreen} />
       <Tabs.Screen name="Help" component={PlaceholderScreen} />
-      <Tabs.Screen name="Profile" component={PlaceholderScreen} />
+      <Tabs.Screen name="Profile" component={ProfileStack} />
     </Tabs.Navigator>
   );
 }

@@ -33,6 +33,7 @@ model Person {
   headOf          Household? @relation("HeadOf")
 
   fullName        String
+  fullNameLatin   String?                    // romanized for English search (§1.5)
   relation        Relation @default(OTHER)
   gender          Gender?
   dob             DateTime?

@@ -1,4 +1,6 @@
-/** Route param types — keep in sync with the navigators. */
+/** Route param types — kept in sync with the navigators. */
+
+import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -7,12 +9,23 @@ export type AuthStackParamList = {
   NotRegistered: { adminContactPhone: string | null };
 };
 
+export type DirectoryStackParamList = {
+  DirectoryList: undefined;
+  MemberDetail: { personId: string };
+};
+
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  MyHousehold: undefined;
+  MemberDetail: { personId: string };
+};
+
 export type RootTabParamList = {
   Home: undefined;
-  Directory: undefined;
+  Directory: NavigatorScreenParams<DirectoryStackParamList>;
   Events: undefined;
   Help: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
 declare global {

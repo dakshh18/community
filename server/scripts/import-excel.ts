@@ -21,6 +21,7 @@ import {
   PROFESSION_CATEGORIES,
   resolveProfessionCategoryName,
 } from '../src/utils/aliases/profession';
+import { buildLatinIndex } from '../src/utils/translit';
 
 const HEADER_MARKER_A = 'અ.નં.';
 const BLOOD_GROUP_RE = /^(A|B|AB|O)[+-]$/;
@@ -309,9 +310,12 @@ async function upsertPerson(
     });
   }
 
+  const fullNameLatin = buildLatinIndex(raw.fullName);
+
   if (existing) {
     const updateData: Prisma.PersonUpdateInput = {
       fullName: raw.fullName,
+      fullNameLatin,
       relation,
       bloodGroup: raw.bloodGroup ?? existing.bloodGroup,
       professionRaw: raw.professionRaw ?? existing.professionRaw,
@@ -331,6 +335,7 @@ async function upsertPerson(
   const createData: Prisma.PersonCreateInput = {
     household: { connect: { id: householdId } },
     fullName: raw.fullName,
+    fullNameLatin,
     relation,
     bloodGroup: raw.bloodGroup ?? undefined,
     professionRaw: raw.professionRaw ?? undefined,
