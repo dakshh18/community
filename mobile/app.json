@@ -20,7 +20,7 @@
       "expo-secure-store"
     ],
     "extra": {
-      "apiUrl": "http://localhost:4000"
+      "apiUrl": "https://samajconnectprod.duckdns.org"
     }
   }
 }

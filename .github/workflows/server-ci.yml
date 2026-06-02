@@ -1,0 +1,53 @@
+# Continuous Integration for the backend.
+# Runs on every push (any branch) and on every PR targeting main.
+# Only triggers when server/** files change — pure mobile changes don't waste CI minutes.
+
+name: Server CI
+
+on:
+  push:
+    paths:
+      - 'server/**'
+      - '.github/workflows/server-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+
+# Cancel in-progress runs on the same branch if a new commit is pushed.
+# Saves minutes — only the latest commit gets fully tested.
+concurrency:
+  group: server-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-build:
+    name: Typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies (exactly per package-lock)
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: TypeScript type-check
+        run: npm run typecheck
+
+      - name: Build server
+        run: npm run build
