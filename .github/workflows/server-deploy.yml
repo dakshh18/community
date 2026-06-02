@@ -1,0 +1,64 @@
+# Continuous Deployment for the backend.
+# Fires automatically when Server CI finishes successfully on main,
+# OR manually from the Actions tab via "Run workflow".
+
+name: Server Deploy
+
+on:
+  # Chain: only deploys after the Server CI workflow passes on main
+  workflow_run:
+    workflows: ['Server CI']
+    types: [completed]
+    branches: [main]
+  # Allow operator-triggered deploys from the Actions UI
+  workflow_dispatch:
+
+# Never run two deploys at once. Subsequent triggers queue, they don't kill the running deploy.
+concurrency:
+  group: server-deploy
+  cancel-in-progress: false
+
+# Read-only token; we don't push or comment from this workflow.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    # Only deploy when:
+    #  - the trigger was a successful Server CI run, OR
+    #  - the operator clicked "Run workflow" (workflow_dispatch)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: SSH and run ~/deploy.sh on EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          command_timeout: 6m
+          script: |
+            bash ~/deploy.sh
+
+      - name: Verify /health returns production
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            if body=$(curl -fsS "https://samajconnectprod.duckdns.org/health"); then
+              echo "Health response: $body"
+              if echo "$body" | grep -q '"env":"production"'; then
+                echo "::notice::✅ Deploy verified — /health returned production"
+                exit 0
+              fi
+            fi
+            echo "Attempt $i: not ready yet, sleeping 3s..."
+            sleep 3
+          done
+          echo "::error::❌ /health did not respond with production env within ~18s"
+          exit 1
