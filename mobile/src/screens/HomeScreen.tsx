@@ -1,3 +1,20 @@
+/**
+ * Home screen — the first thing every member sees.
+ *
+ * Layout (member view):
+ *   1. Greeting hero: avatar + namaste + name + native place + role pill
+ *   2. Search bar (tap → Directory)
+ *   3. Two side-by-side hero cards (saffron Community + deep-green Event)
+ *   4. Payment due banner (if any) — high-contrast so it's hard to miss
+ *   5. Section divider with title + counts
+ *   6. Native places as 2-column vertical grid (no horizontal scroll)
+ *   7. Help shortcut card
+ *
+ * Admin / committee view: the saffron Community card swaps for a deeper
+ * saffron "Finance" card showing collected/outstanding, and an admin
+ * queue row appears with pending corrections + help requests.
+ */
+
 import React, { useMemo } from 'react';
 import {
   Pressable,
@@ -21,8 +38,10 @@ import {
   useProfessions,
   useUpcomingEvent,
 } from '@/api/hooks';
-import { NativePlaceCard } from '@/components/NativePlaceCard';
 import { useAuthStore } from '@/auth/store';
+import { Avatar } from '@/components/Avatar';
+import { CommunityHeroCard, UpcomingEventHeroCard } from '@/components/HomeHeroCards';
+import { NativePlaceCard } from '@/components/NativePlaceCard';
 import { colors, radius, shadow, spacing, typography } from '@/theme';
 import type { RootTabParamList } from '@/navigation/types';
 
@@ -39,20 +58,10 @@ function fmtINR(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
 }
 
-function fmtEventDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function daysUntil(iso: string): number {
-  const d = new Date(iso).getTime();
-  if (Number.isNaN(d)) return Infinity;
-  return Math.ceil((d - Date.now()) / (24 * 60 * 60 * 1000));
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 // ---------- Component ----------
@@ -71,13 +80,16 @@ export function HomeScreen() {
 
   const me = household.data?.members.find((m) => m.isOwner);
   const greetingName = firstName(me?.fullName) ?? 'there';
+  const myNativePlace = household.data?.household.nativePlace ?? null;
   const isAdmin = viewer?.role === 'ADMIN';
   const isCommittee = viewer?.role === 'COMMITTEE';
   const isPrivileged = isAdmin || isCommittee;
+  const privilegedStats = isAdmin ? adminStats.data : committeeStats.data;
 
   const refreshing =
     household.isRefetching ||
     professions.isRefetching ||
+    nativePlaces.isRefetching ||
     upcoming.isRefetching ||
     adminStats.isRefetching ||
     committeeStats.isRefetching;
@@ -92,22 +104,7 @@ export function HomeScreen() {
     if (isPrivileged) void committeeStats.refetch();
   }
 
-  // Privileged stats — admin wins, else committee.
-  const privilegedStats = isAdmin ? adminStats.data : committeeStats.data;
-
-  const totalMembers = professions.data?.totalPersons;
-  const totalCorrections = isAdmin
-    ? adminStats.data?.queues.pendingCorrections
-    : committeeStats.data?.queues.pendingCorrections;
-  const totalHelpPending = isAdmin ? adminStats.data?.queues.pendingHelpRequests : null;
-
-  // Payment due — only show if there's an upcoming event and member hasn't fully paid.
-  const showPaymentCard =
-    !!upcoming.data &&
-    !!myPayment.data &&
-    myPayment.data.amountPaid < myPayment.data.amountDue;
-
-  // Directory is a nested stack — pass the initial screen explicitly so TS is happy.
+  // ---- Navigation ----
   const goToDirectory = () =>
     navigation.navigate('Directory', { screen: 'DirectoryList' });
   const goToNativePlace = (nativePlace: string) =>
@@ -115,8 +112,25 @@ export function HomeScreen() {
       screen: 'DirectoryList',
       params: { nativePlace },
     });
-  const goToEvents = () => navigation.navigate('Events');
+  const goToEvents = () => navigation.navigate('Events', { screen: 'EventsList' });
+  const goToEventDetail = (eventId: string) =>
+    navigation.navigate('Events', { screen: 'EventDetail', params: { eventId } });
+  const goToPaymentStatus = (eventId: string) =>
+    navigation.navigate('Events', { screen: 'PaymentStatus', params: { eventId } });
   const goToHelp = () => navigation.navigate('Help');
+
+  // ---- Derived ----
+  const totalMembers = professions.data?.totalPersons;
+  const villageCount = nativePlaces.data?.length;
+  const showPaymentCard =
+    !!upcoming.data &&
+    !!myPayment.data &&
+    myPayment.data.amountPaid < myPayment.data.amountDue;
+
+  const nativeRows = useMemo(
+    () => chunk(nativePlaces.data ?? [], 2),
+    [nativePlaces.data],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -132,136 +146,133 @@ export function HomeScreen() {
           />
         }
       >
-        {/* Greeting */}
-        <View style={styles.greetingBlock}>
-          <Text style={styles.greetingHello}>Namaste 🙏</Text>
-          <Text style={styles.greetingName}>{greetingName}</Text>
-          {isPrivileged ? (
-            <View style={styles.rolePill}>
-              <Ionicons name="shield-checkmark-outline" size={12} color={colors.primaryDark} />
-              <Text style={styles.rolePillText}>{viewer?.role}</Text>
+        {/* === 1. Greeting === */}
+        <View style={styles.greetingRow}>
+          <Avatar name={me?.fullName ?? greetingName} size={56} />
+          <View style={styles.greetingText}>
+            <Text style={styles.namaste}>Namaste 🙏</Text>
+            <Text style={styles.name} numberOfLines={1}>
+              {greetingName}
+            </Text>
+            <View style={styles.metaRow}>
+              {myNativePlace ? (
+                <View style={styles.metaPiece}>
+                  <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {myNativePlace}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>{viewer?.role ?? 'MEMBER'}</Text>
+              </View>
             </View>
-          ) : null}
+          </View>
         </View>
 
-        {/* Search bar — tappable, opens Directory */}
+        {/* === 2. Search bar === */}
         <Pressable
           onPress={goToDirectory}
           style={({ pressed }) => [styles.searchBar, pressed && styles.searchBarPressed]}
         >
           <Ionicons name="search" size={18} color={colors.textMuted} />
-          <Text style={styles.searchPlaceholder}>
-            Search doctor, teacher, business…
-          </Text>
+          <Text style={styles.searchPlaceholder}>Search doctor, teacher, business…</Text>
+          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
         </Pressable>
 
-        {/* Native places */}
-        {nativePlaces.data && nativePlaces.data.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Native places</Text>
-              <Text style={styles.sectionMeta}>
-                {nativePlaces.data.length} villages
-              </Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.nativeRow}
-            >
-              {nativePlaces.data.map((np) => (
-                <NativePlaceCard
-                  key={np.nativePlace}
-                  nativePlace={np.nativePlace}
-                  personsCount={np.personsCount}
-                  householdsCount={np.householdsCount}
-                  onPress={goToNativePlace}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
+        {/* === 3. Top featured cards (saffron + deep green) === */}
+        <View style={styles.heroRow}>
+          {isPrivileged && privilegedStats ? (
+            <PrivilegedFinanceCard
+              collected={privilegedStats.payments.collected}
+              outstanding={privilegedStats.payments.outstanding}
+              onPress={goToEvents}
+            />
+          ) : (
+            <CommunityHeroCard
+              totalMembers={totalMembers}
+              villagesCount={villageCount}
+              onPress={goToDirectory}
+            />
+          )}
 
-        {/* Admin / committee dashboard strip */}
-        {isPrivileged && privilegedStats ? (
-          <View style={styles.adminGrid}>
-            {typeof totalCorrections === 'number' ? (
-              <StatCard
-                icon="document-text-outline"
-                value={totalCorrections.toLocaleString()}
-                label="Pending corrections"
-                tone="warning"
-              />
-            ) : null}
-            {isAdmin && typeof totalHelpPending === 'number' ? (
-              <StatCard
-                icon="hand-right-outline"
-                value={totalHelpPending.toLocaleString()}
-                label="Help requests"
-                tone="info"
-              />
-            ) : null}
-            <StatCard
-              icon="cash-outline"
-              value={fmtINR(privilegedStats.payments.collected)}
-              label="Collected"
-              tone="success"
-            />
-            <StatCard
-              icon="alert-circle-outline"
-              value={fmtINR(privilegedStats.payments.outstanding)}
-              label="Outstanding"
-              tone="danger"
-            />
-          </View>
-        ) : null}
-
-        {/* Member quick stats */}
-        {!isPrivileged ? (
-          <View style={styles.memberGrid}>
-            <StatCard
-              icon="people-outline"
-              value={
-                typeof totalMembers === 'number' ? totalMembers.toLocaleString() : '—'
-              }
-              label="Community members"
-              tone="primary"
-            />
-            <StatCard
-              icon="calendar-outline"
-              value={upcoming.data ? '1' : '0'}
-              label="Upcoming events"
-              tone="info"
-            />
-          </View>
-        ) : null}
-
-        {/* Upcoming event card */}
-        {upcoming.data ? (
-          <UpcomingEventCard
-            event={upcoming.data}
-            payment={myPayment.data ?? null}
-            onPress={goToEvents}
+          <UpcomingEventHeroCard
+            event={
+              upcoming.data
+                ? {
+                    name: upcoming.data.name,
+                    dateTime: upcoming.data.dateTime,
+                    contributionPerFamily: upcoming.data.contributionPerFamily,
+                  }
+                : null
+            }
+            onPress={() =>
+              upcoming.data ? goToEventDetail(upcoming.data.id) : goToEvents()
+            }
           />
-        ) : (
-          <EmptyEventCard />
-        )}
+        </View>
 
-        {/* Payment due reminder (member view, only when unpaid) */}
+        {/* === 4. Payment due banner === */}
         {showPaymentCard && myPayment.data && upcoming.data ? (
-          <PaymentDueCard
+          <PaymentDueBanner
             amountDue={myPayment.data.amountDue}
             amountPaid={myPayment.data.amountPaid}
-            status={myPayment.data.status}
             eventName={upcoming.data.name}
-            onPress={goToEvents}
+            onPress={() => goToPaymentStatus(upcoming.data!.id)}
           />
         ) : null}
 
-        {/* Find help shortcut */}
+        {/* === 5. Admin queue (privileged only) === */}
+        {isPrivileged && privilegedStats ? (
+          <AdminQueueRow
+            pendingCorrections={privilegedStats.queues.pendingCorrections}
+            pendingHelp={
+              isAdmin && adminStats.data
+                ? adminStats.data.queues.pendingHelpRequests
+                : null
+            }
+          />
+        ) : null}
+
+        {/* === 6. Section divider — Native places === */}
+        <View style={styles.sectionHeaderBlock}>
+          <View style={styles.sectionAccent} />
+          <View style={styles.sectionTitleWrap}>
+            <Text style={styles.sectionTitle}>Native places</Text>
+            <Text style={styles.sectionSubtitle}>
+              {nativePlaces.data
+                ? `${nativePlaces.data.length} villages · tap to filter the directory`
+                : 'Loading villages…'}
+            </Text>
+          </View>
+        </View>
+
+        {/* === 7. Vertical 2-col grid === */}
+        <View style={styles.grid}>
+          {nativeRows.map((row, rowIdx) => (
+            <View key={rowIdx} style={styles.gridRow}>
+              {row.map((np, colIdx) => {
+                const overallIdx = rowIdx * 2 + colIdx;
+                return (
+                  <NativePlaceCard
+                    key={np.nativePlace}
+                    nativePlace={np.nativePlace}
+                    personsCount={np.personsCount}
+                    householdsCount={np.householdsCount}
+                    rank={overallIdx < 3 ? overallIdx + 1 : undefined}
+                    onPress={goToNativePlace}
+                  />
+                );
+              })}
+              {row.length === 1 ? <View style={{ flex: 1 }} /> : null}
+            </View>
+          ))}
+        </View>
+
+        {/* === 8. Help shortcut === */}
         <HelpShortcutCard onPress={goToHelp} />
 
-        <View style={styles.footerSpacer} />
+        <View style={{ height: spacing.lg }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -269,118 +280,67 @@ export function HomeScreen() {
 
 // ---------- Sub-components ----------
 
-interface StatCardProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  value: string;
-  label: string;
-  tone: 'primary' | 'success' | 'warning' | 'danger' | 'info';
-}
-
-function StatCard({ icon, value, label, tone }: StatCardProps) {
-  const toneColor = (() => {
-    switch (tone) {
-      case 'primary':
-        return { bg: colors.primarySoft, fg: colors.primaryDark };
-      case 'success':
-        return { bg: colors.successSoft, fg: colors.success };
-      case 'warning':
-        return { bg: colors.warningSoft, fg: colors.warning };
-      case 'danger':
-        return { bg: colors.dangerSoft, fg: colors.danger };
-      case 'info':
-      default:
-        return { bg: '#E3F2FD', fg: colors.info };
-    }
-  })();
-  return (
-    <View style={styles.statCard}>
-      <View style={[styles.statIcon, { backgroundColor: toneColor.bg }]}>
-        <Ionicons name={icon} size={20} color={toneColor.fg} />
-      </View>
-      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={styles.statLabel} numberOfLines={2}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function UpcomingEventCard({
-  event,
-  payment,
+function PrivilegedFinanceCard({
+  collected,
+  outstanding,
   onPress,
 }: {
-  event: { id: string; name: string; dateTime: string; venue: string | null; contributionPerFamily: number; registrationsCount: number };
-  payment: { status: 'PENDING' | 'PARTIAL' | 'PAID'; amountDue: number; amountPaid: number } | null;
+  collected: number;
+  outstanding: number;
   onPress: () => void;
 }) {
-  const days = daysUntil(event.dateTime);
-  const dayLabel =
-    days <= 0
-      ? 'Today'
-      : days === 1
-        ? 'Tomorrow'
-        : days <= 60
-          ? `in ${days} days`
-          : `on ${fmtEventDate(event.dateTime)}`;
-
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.eventCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.privCard, pressed && { opacity: 0.92 }]}
     >
-      <View style={styles.eventBadge}>
-        <Ionicons name="calendar" size={14} color={colors.primaryDark} />
-        <Text style={styles.eventBadgeText}>Upcoming</Text>
+      <View style={styles.privIconBubble}>
+        <Ionicons name="cash" size={20} color={colors.textOnPrimary} />
       </View>
-      <Text style={styles.eventTitle}>{event.name}</Text>
-      <Text style={styles.eventDate}>{dayLabel} · {fmtEventDate(event.dateTime)}</Text>
-      {event.venue ? (
-        <View style={styles.eventMeta}>
-          <Ionicons name="location-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.eventMetaText}>{event.venue}</Text>
-        </View>
-      ) : null}
-      <View style={styles.eventDivider} />
-      <View style={styles.eventFooter}>
-        <View>
-          <Text style={styles.eventLabel}>Contribution / family</Text>
-          <Text style={styles.eventStrong}>{fmtINR(event.contributionPerFamily)}</Text>
-        </View>
-        <View style={styles.eventCta}>
-          <Text style={styles.eventCtaText}>
-            {payment?.status === 'PAID' ? 'View status' : 'Register →'}
-          </Text>
-        </View>
+      <Text style={styles.privPrimary}>{fmtINR(collected)}</Text>
+      <Text style={styles.privLabel}>Collected so far</Text>
+      <View style={styles.privDivider} />
+      <View style={styles.privFooterRow}>
+        <Text style={styles.privFooter}>{fmtINR(outstanding)} due</Text>
+        <Text style={styles.privFooter}>View →</Text>
       </View>
     </Pressable>
   );
 }
 
-function EmptyEventCard() {
+function AdminQueueRow({
+  pendingCorrections,
+  pendingHelp,
+}: {
+  pendingCorrections: number;
+  pendingHelp: number | null;
+}) {
   return (
-    <View style={styles.emptyEventCard}>
-      <Ionicons name="calendar-clear-outline" size={28} color={colors.textMuted} />
-      <Text style={styles.emptyEventTitle}>No upcoming events</Text>
-      <Text style={styles.emptyEventBody}>
-        We'll show the next Snehmilan here as soon as it's announced.
-      </Text>
+    <View style={styles.queueRow}>
+      <View style={styles.queueCard}>
+        <Ionicons name="document-text-outline" size={20} color={colors.warning} />
+        <Text style={styles.queueValue}>{pendingCorrections}</Text>
+        <Text style={styles.queueLabel}>Pending corrections</Text>
+      </View>
+      {pendingHelp !== null ? (
+        <View style={styles.queueCard}>
+          <Ionicons name="hand-right-outline" size={20} color={colors.info} />
+          <Text style={styles.queueValue}>{pendingHelp}</Text>
+          <Text style={styles.queueLabel}>Help requests</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function PaymentDueCard({
+function PaymentDueBanner({
   amountDue,
   amountPaid,
-  status,
   eventName,
   onPress,
 }: {
   amountDue: number;
   amountPaid: number;
-  status: 'PENDING' | 'PARTIAL' | 'PAID';
   eventName: string;
   onPress: () => void;
 }) {
@@ -388,19 +348,19 @@ function PaymentDueCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.paymentCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.payBanner, pressed && { opacity: 0.92 }]}
     >
-      <View style={[styles.paymentIcon, { backgroundColor: colors.warningSoft }]}>
+      <View style={styles.payIconWrap}>
         <Ionicons name="wallet-outline" size={22} color={colors.warning} />
       </View>
-      <View style={styles.paymentBody}>
-        <Text style={styles.paymentLabel}>Payment {status === 'PARTIAL' ? 'partial' : 'due'}</Text>
-        <Text style={styles.paymentAmount}>{fmtINR(remaining)}</Text>
-        <Text style={styles.paymentMeta}>
-          for {eventName}{status === 'PARTIAL' ? ` · ${fmtINR(amountPaid)} paid` : ''}
+      <View style={styles.payBody}>
+        <Text style={styles.payLabel}>
+          {amountPaid > 0 ? 'PARTIAL PAYMENT' : 'PAYMENT DUE'}
         </Text>
+        <Text style={styles.payAmount}>{fmtINR(remaining)}</Text>
+        <Text style={styles.payMeta}>for {eventName}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={20} color={colors.warning} />
     </Pressable>
   );
 }
@@ -409,9 +369,9 @@ function HelpShortcutCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.helpCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.helpCard, pressed && { opacity: 0.92 }]}
     >
-      <View style={[styles.helpIcon, { backgroundColor: colors.successSoft }]}>
+      <View style={styles.helpIcon}>
         <Ionicons name="hand-right-outline" size={22} color={colors.success} />
       </View>
       <View style={styles.helpBody}>
@@ -433,30 +393,30 @@ function HelpShortcutCard({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  footerSpacer: { height: spacing.lg },
+  content: { padding: spacing.lg, gap: spacing.lg },
 
-  // Greeting
-  greetingBlock: { gap: spacing.xs, marginTop: spacing.sm },
-  greetingHello: { ...typography.body, color: colors.textMuted },
-  greetingName: { ...typography.display, color: colors.text },
-  rolePill: {
+  // === 1. Greeting ===
+  greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  greetingText: { flex: 1, gap: 2 },
+  namaste: { ...typography.body, color: colors.textMuted },
+  name: { ...typography.h1, color: colors.text },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  metaPiece: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '60%' },
+  metaText: { ...typography.caption, color: colors.textMuted },
+  rolePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
-    marginTop: spacing.xs,
   },
-  rolePillText: { ...typography.caption, color: colors.primaryDark, fontWeight: '600' },
+  rolePillText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700', fontSize: 10 },
 
-  // Search bar
+  // === 2. Search ===
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -471,95 +431,86 @@ const styles = StyleSheet.create({
   searchBarPressed: { opacity: 0.7 },
   searchPlaceholder: { ...typography.body, color: colors.textMuted, flex: 1 },
 
-  // Stat grid (member: 2-up, admin: 2-up wrap)
-  memberGrid: { flexDirection: 'row', gap: spacing.md },
-  adminGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  statCard: {
-    flexGrow: 1,
-    flexBasis: '40%',
+  // === 3. Hero row ===
+  heroRow: { flexDirection: 'row', gap: spacing.md },
+
+  privCard: {
+    flex: 1,
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    minHeight: 180,
+    ...shadow.card,
+  },
+  privIconBubble: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  privPrimary: { ...typography.h2, color: colors.textOnPrimary, fontWeight: '700' },
+  privLabel: { ...typography.bodySmall, color: 'rgba(255,255,255,0.85)' },
+  privDivider: { height: 1, marginTop: spacing.md, marginBottom: spacing.sm, backgroundColor: 'rgba(255,255,255,0.33)' },
+  privFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  privFooter: { ...typography.caption, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
+
+  // === Admin queue ===
+  queueRow: { flexDirection: 'row', gap: spacing.md },
+  queueCard: {
+    flex: 1,
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: radius.lg,
     gap: spacing.xs,
-    minWidth: 140,
     ...shadow.card,
   },
-  statIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
-  },
-  statValue: { ...typography.h2, color: colors.text },
-  statLabel: { ...typography.bodySmall, color: colors.textMuted },
+  queueValue: { ...typography.h2, color: colors.text },
+  queueLabel: { ...typography.bodySmall, color: colors.textMuted },
 
-  // Event card
-  eventCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.xs,
-    ...shadow.card,
-  },
-  cardPressed: { opacity: 0.85 },
-  eventBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
-    marginBottom: spacing.sm,
-  },
-  eventBadgeText: { ...typography.caption, color: colors.primaryDark },
-  eventTitle: { ...typography.h2, color: colors.text },
-  eventDate: { ...typography.body, color: colors.textMuted },
-  eventMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
-  eventMetaText: { ...typography.bodySmall, color: colors.textMuted, flex: 1 },
-  eventDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
-  eventFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  eventLabel: { ...typography.caption, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  eventStrong: { ...typography.h3, color: colors.text },
-  eventCta: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-  },
-  eventCtaText: { ...typography.button, color: colors.textOnPrimary },
-
-  emptyEventCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyEventTitle: { ...typography.h3, color: colors.text, marginTop: spacing.sm },
-  emptyEventBody: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
-
-  // Payment due
-  paymentCard: {
+  // === Payment due banner ===
+  payBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
+    backgroundColor: colors.warningSoft,
     borderRadius: radius.lg,
-    ...shadow.card,
+    padding: spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
   },
-  paymentIcon: {
-    width: 48, height: 48, borderRadius: 24,
+  payIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',
   },
-  paymentBody: { flex: 1, gap: 2 },
-  paymentLabel: { ...typography.caption, color: colors.warning, textTransform: 'uppercase', letterSpacing: 0.5 },
-  paymentAmount: { ...typography.h2, color: colors.text },
-  paymentMeta: { ...typography.bodySmall, color: colors.textMuted },
+  payBody: { flex: 1, gap: 2 },
+  payLabel: { ...typography.caption, color: colors.warning, fontWeight: '700', letterSpacing: 0.5 },
+  payAmount: { ...typography.h2, color: colors.text },
+  payMeta: { ...typography.bodySmall, color: colors.textMuted },
 
-  // Help shortcut
+  // === Section header ===
+  sectionHeaderBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  sectionAccent: {
+    width: 4,
+    alignSelf: 'stretch',
+    minHeight: 36,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+  },
+  sectionTitleWrap: { flex: 1, gap: 2 },
+  sectionTitle: { ...typography.h2, color: colors.text },
+  sectionSubtitle: { ...typography.bodySmall, color: colors.textMuted },
+
+  // === Native places grid ===
+  grid: { gap: spacing.md },
+  gridRow: { flexDirection: 'row', gap: spacing.md },
+
+  // === Help shortcut ===
   helpCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -567,10 +518,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: spacing.lg,
     borderRadius: radius.lg,
+    marginTop: spacing.md,
     ...shadow.card,
   },
   helpIcon: {
     width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.successSoft,
     alignItems: 'center', justifyContent: 'center',
   },
   helpBody: { flex: 1, gap: spacing.sm },
@@ -583,15 +536,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   helpTagText: { ...typography.caption, color: colors.textMuted },
-
-  // Native places section
-  section: { gap: spacing.sm },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  sectionTitle: { ...typography.h3, color: colors.text },
-  sectionMeta: { ...typography.caption, color: colors.textMuted },
-  nativeRow: { gap: spacing.md, paddingRight: spacing.lg, paddingVertical: spacing.xs },
 });

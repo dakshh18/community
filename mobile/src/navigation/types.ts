@@ -14,6 +14,14 @@ export type DirectoryStackParamList = {
   MemberDetail: { personId: string };
 };
 
+export type EventsStackParamList = {
+  EventsList: undefined;
+  EventDetail: { eventId: string };
+  Register: { eventId: string };
+  PerformanceForm: { registrationId: string; eventId: string };
+  PaymentStatus: { eventId: string };
+};
+
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   MyHousehold: undefined;
@@ -23,7 +31,7 @@ export type ProfileStackParamList = {
 export type RootTabParamList = {
   Home: undefined;
   Directory: NavigatorScreenParams<DirectoryStackParamList>;
-  Events: undefined;
+  Events: NavigatorScreenParams<EventsStackParamList>;
   Help: undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
@@ -31,6 +39,9 @@ export type RootTabParamList = {
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace ReactNavigation {
-    interface RootParamList extends AuthStackParamList, RootTabParamList {}
+    interface RootParamList
+      extends AuthStackParamList,
+        RootTabParamList,
+        EventsStackParamList {}
   }
 }

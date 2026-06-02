@@ -2,7 +2,12 @@
  * React Query hooks for the directory endpoints. Keep query keys flat and
  * predictable so they're easy to invalidate from other modules.
  */
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import {
   getDirectory,
@@ -11,9 +16,21 @@ import {
   getPerson,
   getProfessions,
 } from './directory';
-import { listEvents, getMyPayment } from './events';
+import {
+  addPerformance,
+  cancelRegistration,
+  getEvent,
+  getMyPayment,
+  listEvents,
+  registerForEvent,
+  removePerformance,
+} from './events';
 import { getAdminStats, getCommitteeStats } from './stats';
-import type { DirectoryQuery } from './types';
+import type {
+  DirectoryQuery,
+  PerformanceInput,
+  RegisterForEventInput,
+} from './types';
 import { useAuthStore } from '@/auth/store';
 
 export const qk = {
@@ -22,7 +39,9 @@ export const qk = {
   myHousehold: () => ['households', 'me'] as const,
   professions: () => ['professions'] as const,
   nativePlaces: () => ['native-places'] as const,
+  eventsList: (upcoming: boolean) => ['events', 'list', { upcoming }] as const,
   upcomingEvents: () => ['events', 'upcoming'] as const,
+  event: (id: string) => ['events', id] as const,
   myPayment: (eventId: string) => ['events', eventId, 'payment', 'me'] as const,
   adminStats: () => ['admin', 'stats'] as const,
   committeeStats: () => ['committee', 'stats'] as const,
@@ -87,6 +106,79 @@ export function useMyPayment(eventId: string | undefined) {
     queryKey: eventId ? qk.myPayment(eventId) : ['events', 'none', 'payment', 'me'],
     enabled: !!eventId,
     queryFn: () => getMyPayment(eventId as string),
+  });
+}
+
+export function useEventsList(upcoming: boolean) {
+  return useQuery({
+    queryKey: qk.eventsList(upcoming),
+    queryFn: () => listEvents({ upcoming, pageSize: 50 }),
+    select: (data) => data.items,
+  });
+}
+
+export function useEvent(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? qk.event(id) : ['events', 'none'],
+    enabled: !!id,
+    queryFn: () => getEvent(id as string),
+  });
+}
+
+// ---------- Mutations ----------
+
+/**
+ * After any registration/performance/payment change, the Home dashboards and
+ * the affected event detail both need to re-fetch. Doing it here keeps the
+ * call sites simple.
+ */
+function useInvalidateEvent(eventId: string | undefined) {
+  const qc = useQueryClient();
+  return () => {
+    if (eventId) {
+      void qc.invalidateQueries({ queryKey: qk.event(eventId) });
+      void qc.invalidateQueries({ queryKey: qk.myPayment(eventId) });
+    }
+    void qc.invalidateQueries({ queryKey: qk.upcomingEvents() });
+    void qc.invalidateQueries({ queryKey: qk.eventsList(true) });
+    void qc.invalidateQueries({ queryKey: qk.eventsList(false) });
+  };
+}
+
+export function useRegisterForEvent(eventId: string | undefined) {
+  const invalidate = useInvalidateEvent(eventId);
+  return useMutation({
+    mutationFn: (input: RegisterForEventInput) =>
+      registerForEvent(eventId as string, input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCancelRegistration(eventId: string | undefined) {
+  const invalidate = useInvalidateEvent(eventId);
+  return useMutation({
+    mutationFn: () => cancelRegistration(eventId as string),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAddPerformance(
+  registrationId: string | undefined,
+  eventId: string | undefined,
+) {
+  const invalidate = useInvalidateEvent(eventId);
+  return useMutation({
+    mutationFn: (input: PerformanceInput) =>
+      addPerformance(registrationId as string, input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRemovePerformance(eventId: string | undefined) {
+  const invalidate = useInvalidateEvent(eventId);
+  return useMutation({
+    mutationFn: (performanceId: string) => removePerformance(performanceId),
+    onSuccess: invalidate,
   });
 }
 

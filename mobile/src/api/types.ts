@@ -143,6 +143,7 @@ export interface NativePlaceRow {
 
 export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
 export type PaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER';
+export type PerformanceType = 'DANCE' | 'ACT' | 'SPEECH' | 'SINGING' | 'OTHER';
 
 export interface EventListItem {
   id: string;
@@ -164,6 +165,23 @@ export interface EventListResult {
   totalPages: number;
 }
 
+export interface Performance {
+  id: string;
+  registrationId: string;
+  childName: string;
+  type: PerformanceType;
+  title: string | null;
+  durationMin: number | null;
+  notes: string | null;
+}
+
+export interface MyRegistration {
+  id: string;
+  attendeesCount: number;
+  performances: Performance[];
+  createdAt: string;
+}
+
 export interface MyPaymentView {
   id: string;
   eventId: string;
@@ -175,6 +193,34 @@ export interface MyPaymentView {
   reference: string | null;
   paidAt: string | null;
   notes: string | null;
+}
+
+/** EventDetail extends list item with caller-specific registration + payment state. */
+export interface EventDetail extends EventListItem {
+  me: {
+    registration: MyRegistration | null;
+    payment: {
+      id: string;
+      amountDue: number;
+      amountPaid: number;
+      status: PaymentStatus;
+      mode: PaymentMode | null;
+      paidAt: string | null;
+    } | null;
+  };
+}
+
+export interface PerformanceInput {
+  childName: string;
+  type: PerformanceType;
+  title?: string | null;
+  durationMin?: number | null;
+  notes?: string | null;
+}
+
+export interface RegisterForEventInput {
+  attendeesCount: number;
+  performances?: PerformanceInput[];
 }
 
 // ---------- Dashboard stats ----------
