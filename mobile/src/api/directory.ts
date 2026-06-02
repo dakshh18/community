@@ -4,6 +4,7 @@ import type {
   DirectoryPage,
   DirectoryQuery,
   MyHouseholdResult,
+  NativePlaceRow,
   PersonView,
   ProfessionsResult,
 } from './types';
@@ -25,5 +26,10 @@ export async function getMyHousehold(): Promise<MyHouseholdResult> {
 
 export async function getProfessions(): Promise<ProfessionsResult> {
   const { data } = await api.get<ProfessionsResult>('/professions');
+  return data;
+}
+
+export async function getNativePlaces(): Promise<NativePlaceRow[]> {
+  const { data } = await api.get<NativePlaceRow[]>('/native-places');
   return data;
 }

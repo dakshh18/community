@@ -132,3 +132,93 @@ export interface ProfessionsResult {
 
 /** Sentinel for the "Other" chip — filters for persons with no profession category. */
 export const NO_CATEGORY = 'none';
+
+export interface NativePlaceRow {
+  nativePlace: string;
+  personsCount: number;
+  householdsCount: number;
+}
+
+// ---------- Events ----------
+
+export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
+export type PaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'OTHER';
+
+export interface EventListItem {
+  id: string;
+  name: string;
+  dateTime: string;
+  venue: string | null;
+  description: string | null;
+  contributionPerFamily: number;
+  registrationOpen: boolean;
+  registrationsCount: number;
+  createdAt: string;
+}
+
+export interface EventListResult {
+  items: EventListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface MyPaymentView {
+  id: string;
+  eventId: string;
+  householdId: string;
+  amountDue: number;
+  amountPaid: number;
+  status: PaymentStatus;
+  mode: PaymentMode | null;
+  reference: string | null;
+  paidAt: string | null;
+  notes: string | null;
+}
+
+// ---------- Dashboard stats ----------
+
+export interface UpcomingEventStat {
+  id: string;
+  name: string;
+  dateTime: string;
+  venue: string | null;
+  registrationsCount: number;
+  contributionPerFamily: number;
+}
+
+export interface PaymentsAggregate {
+  eventsTotal: number;
+  registrationsTotal: number;
+  expected: number;
+  collected: number;
+  outstanding: number;
+  statusBuckets: { PENDING: number; PARTIAL: number; PAID: number };
+}
+
+export interface RecentHelpRequest {
+  id: string;
+  category: string;
+  urgency: 'LOW' | 'NORMAL' | 'HIGH';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  description: string;
+  requestedByName: string;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  totals: { households: number; persons: number; users: number; activeUsers: number };
+  queues: { pendingCorrections: number; pendingHelpRequests: number };
+  byProfession: { id: string; name: string; nameGu: string | null; personsCount: number }[];
+  upcomingEvents: UpcomingEventStat[];
+  payments: PaymentsAggregate;
+  recentHelpRequests: RecentHelpRequest[];
+}
+
+export interface CommitteeStats {
+  totals: { households: number; persons: number };
+  queues: { pendingCorrections: number };
+  upcomingEvents: UpcomingEventStat[];
+  payments: PaymentsAggregate;
+}

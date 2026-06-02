@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -24,9 +24,19 @@ import type { DirectoryStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<DirectoryStackParamList, 'DirectoryList'>;
 
-export function DirectoryScreen({ navigation }: Props) {
+export function DirectoryScreen({ navigation, route }: Props) {
+  const initialNativePlace = route.params?.nativePlace;
   const [query, setQuery] = useState('');
   const [profCatId, setProfCatId] = useState<string | null>(null);
+  const [nativePlace, setNativePlace] = useState<string | null>(initialNativePlace ?? null);
+
+  // If the param changes mid-session (e.g. user taps a different village from
+  // Home and comes back here), reflect it.
+  useEffect(() => {
+    if (initialNativePlace !== undefined) {
+      setNativePlace(initialNativePlace);
+    }
+  }, [initialNativePlace]);
 
   const debouncedQuery = useDeferredValue(query.trim());
 
@@ -34,8 +44,9 @@ export function DirectoryScreen({ navigation }: Props) {
     () => ({
       q: debouncedQuery || undefined,
       professionCategoryId: profCatId ?? undefined,
+      nativePlace: nativePlace ?? undefined,
     }),
-    [debouncedQuery, profCatId],
+    [debouncedQuery, profCatId, nativePlace],
   );
 
   const professionsQuery = useProfessions();
@@ -47,10 +58,11 @@ export function DirectoryScreen({ navigation }: Props) {
   );
   const total = directory.data?.pages[0]?.total ?? 0;
 
-  const hasActiveFilter = !!debouncedQuery || !!profCatId;
+  const hasActiveFilter = !!debouncedQuery || !!profCatId || !!nativePlace;
   function clearAll() {
     setQuery('');
     setProfCatId(null);
+    setNativePlace(null);
   }
 
   function handleOpenPerson(personId: string) {
@@ -75,6 +87,19 @@ export function DirectoryScreen({ navigation }: Props) {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.header}>
+            {nativePlace ? (
+              <Pressable
+                onPress={() => setNativePlace(null)}
+                style={styles.nativePill}
+              >
+                <Ionicons name="location" size={14} color={colors.primaryDark} />
+                <Text style={styles.nativePillText} numberOfLines={1}>
+                  {nativePlace}
+                </Text>
+                <Ionicons name="close-circle" size={16} color={colors.primaryDark} />
+              </Pressable>
+            ) : null}
+
             <TextField
               placeholder="Search by name (English or Gujarati)…"
               value={query}
@@ -239,4 +264,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   clearBtnText: { ...typography.button, color: colors.primaryDark },
+  nativePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+  },
+  nativePillText: {
+    ...typography.bodyMedium,
+    color: colors.primaryDark,
+    maxWidth: 220,
+  },
 });

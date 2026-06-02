@@ -10,7 +10,7 @@ export type AuthStackParamList = {
 };
 
 export type DirectoryStackParamList = {
-  DirectoryList: undefined;
+  DirectoryList: { nativePlace?: string } | undefined;
   MemberDetail: { personId: string };
 };
 

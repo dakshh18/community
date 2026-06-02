@@ -54,3 +54,12 @@ directoryRouter.get('/professions', async (_req, res, next) => {
     next(e);
   }
 });
+
+directoryRouter.get('/native-places', async (_req, res, next) => {
+  try {
+    const result = await svc.listNativePlaces();
+    res.json(result);
+  } catch (e) {
+    next(e);
+  }
+});

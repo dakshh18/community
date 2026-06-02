@@ -174,6 +174,38 @@ export interface ProfessionsResult {
   totalPersons: number;
 }
 
+export interface NativePlaceRow {
+  nativePlace: string;
+  personsCount: number;
+  householdsCount: number;
+}
+
+export async function listNativePlaces(): Promise<NativePlaceRow[]> {
+  const [households, persons] = await Promise.all([
+    prisma.household.groupBy({
+      by: ['nativePlace'],
+      _count: { _all: true },
+    }),
+    prisma.person.findMany({
+      select: { household: { select: { nativePlace: true } } },
+    }),
+  ]);
+
+  const personsByPlace = new Map<string, number>();
+  for (const p of persons) {
+    const np = p.household.nativePlace.trim();
+    personsByPlace.set(np, (personsByPlace.get(np) ?? 0) + 1);
+  }
+
+  return households
+    .map((g) => ({
+      nativePlace: g.nativePlace.trim(),
+      householdsCount: g._count._all,
+      personsCount: personsByPlace.get(g.nativePlace.trim()) ?? 0,
+    }))
+    .sort((a, b) => b.personsCount - a.personsCount);
+}
+
 export async function listProfessions(): Promise<ProfessionsResult> {
   const [cats, totalPersons, withCategory] = await Promise.all([
     prisma.professionCategory.findMany({
