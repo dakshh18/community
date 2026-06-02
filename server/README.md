@@ -74,3 +74,5 @@ server/
 - **Phase D — Settings + Corrections**: privacy toggles, change email, correction queue.
 - **Phase E — Events + Money**: events, registrations, performances, payments, expenses.
 - **Phase F — Admin + Reports**: stats, CSV exports, audit log.
+
+<!-- ci/cd live test 2026-06-02 17:21 -->
