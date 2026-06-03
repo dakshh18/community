@@ -13,7 +13,9 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "fix-indexes": "tsx scripts/fix-indexes.ts",
-    "import": "tsx scripts/import-excel.ts"
+    "import": "tsx scripts/import-excel.ts",
+    "set-admin-password": "tsx scripts/set-admin-password.ts",
+    "bootstrap-admin": "tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

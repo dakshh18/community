@@ -1,4 +1,5 @@
 import jwt, { type SignOptions } from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 import { prisma } from '../db/prisma';
@@ -178,6 +179,64 @@ export async function verifyOtp(rawPhone: string, code: string) {
     },
     personId: person.id,
     householdId: person.householdId,
+  };
+}
+
+/**
+ * Email + password login for the web admin panel. Only ADMIN/COMMITTEE users
+ * who have had a password set (via `scripts/set-admin-password.ts`) can use it.
+ * The member-facing app keeps using the email-OTP flow; this is a separate door.
+ */
+export async function adminLogin(rawEmail: string, password: string) {
+  const parsed = emailSchema.safeParse(rawEmail);
+  // Generic message on every failure path so we don't reveal which emails exist.
+  const invalid = () =>
+    new HttpError(401, 'invalid_credentials', 'Incorrect email or password');
+  if (!parsed.success) throw invalid();
+
+  const user = await prisma.user.findUnique({
+    where: { email: parsed.data },
+    include: { person: { select: { householdId: true } } },
+  });
+  if (!user || !user.passwordHash || !user.isActive) throw invalid();
+  if (user.role !== 'ADMIN' && user.role !== 'COMMITTEE') throw invalid();
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) throw invalid();
+
+  if (!user.personId || !user.person) {
+    throw new HttpError(500, 'no_person', 'Admin account is not linked to a member record');
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  const signOptions: SignOptions = {
+    expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+  };
+  const token = jwt.sign(
+    {
+      sub: user.id,
+      personId: user.personId,
+      householdId: user.person.householdId,
+      role: user.role,
+    },
+    env.JWT_SECRET,
+    signOptions,
+  );
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      role: user.role,
+      phone: toE164India(user.phone),
+      email: user.email,
+    },
+    personId: user.personId,
+    householdId: user.person.householdId,
   };
 }
 

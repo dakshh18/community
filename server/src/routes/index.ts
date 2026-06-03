@@ -8,6 +8,7 @@ import { eventsRouter } from './events';
 import { itemsRouter } from './items';
 import { helpRouter } from './help';
 import { adminRouter } from './admin';
+import { adminMembersRouter } from './adminMembers';
 import { committeeRouter } from './committee';
 import { reportsRouter } from './reports';
 
@@ -20,6 +21,7 @@ apiRouter.use('/corrections', correctionsRouter);
 apiRouter.use('/events', eventsRouter);
 apiRouter.use('/help', helpRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use('/admin', adminMembersRouter);
 apiRouter.use('/committee', committeeRouter);
 apiRouter.use('/reports', reportsRouter);
 apiRouter.use('/', itemsRouter);

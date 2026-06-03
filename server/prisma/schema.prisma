@@ -72,6 +72,7 @@ model User {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   phone        String   @unique              // canonical
   email        String?  @unique              // copied from Person on first login
+  passwordHash String?                       // set only for ADMIN/COMMITTEE web-panel login
   role         Role     @default(MEMBER)
   personId     String?  @db.ObjectId @unique
   person       Person?  @relation(fields: [personId], references: [id])

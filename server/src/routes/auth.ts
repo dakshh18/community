@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { authStart, sendOtp, verifyOtp } from '../services/auth';
+import { authStart, sendOtp, verifyOtp, adminLogin } from '../services/auth';
 import { env } from '../config/env';
 
 export const authRouter = Router();
+
+const adminLoginSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1).max(200),
+});
 
 const startSchema = z.object({
   phone: z.string().min(7).max(20),
@@ -52,6 +57,17 @@ authRouter.post('/verify-otp', async (req, res, next) => {
   try {
     const { phone, code } = verifySchema.parse(req.body);
     const result = await verifyOtp(phone, code);
+    res.json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Web admin panel: email + password. ADMIN/COMMITTEE only.
+authRouter.post('/admin/login', async (req, res, next) => {
+  try {
+    const { email, password } = adminLoginSchema.parse(req.body);
+    const result = await adminLogin(email, password);
     res.json(result);
   } catch (e) {
     next(e);
